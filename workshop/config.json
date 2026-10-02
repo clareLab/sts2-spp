@@ -1,0 +1,6 @@
+{
+  "id": null,
+  "visibility": "public",
+  "dependencies": [],
+  "description": "Card and relic statistics in native hover tooltips, including rewards, shops and card inspection.\n\nShows win-rate difference, pick rate, current-act pick rate and sample counts where data is available. Win-rate difference is shown in percentage points against the matching A10 population.\n\nAlways uses Ascension 10 data, matched to your party size and game version. Items without data stay hidden. Statistics load in the background and are cached locally.\n\nNo additional mods or configuration required.\n\nCommunity data: [url=https://spire-codex.com]Spire Codex[/url]. These are observed community statistics, not official game telemetry.\nSource: [url=https://github.com/clareLab/sts2-spp]GitHub[/url]."
+}

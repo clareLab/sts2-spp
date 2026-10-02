@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/common.sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/unit -p 'test_*.py'
 spp_dotnet run --project tests/unit/StatsTests.csproj -c Release
 case "${1:-}" in
   --source)
