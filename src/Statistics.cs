@@ -65,27 +65,25 @@ internal static class StatsText
         if (item == null) view.Data?.Items.TryGetValue(id, out item);
         if (item != null && (item.Runs > 0 || item.Offered > 0))
         {
-            Add("Win rate", item.WinRate);
-            Add("Pick rate", item.PickRate);
+            Add("Win rate", item.WinRate, item.Runs, "runs");
+            Add("Pick rate", item.PickRate, item.Offered, "offers");
             if (act is >= 0 and < 3) Add($"Act {act + 1} pick", item.ActPickRates[act]);
-            if (item.Runs > 0) Row("Runs", item.Runs.ToString("N0", CultureInfo.InvariantCulture));
-            if (item.Offered > 0) Row("Offers", item.Offered.ToString("N0", CultureInfo.InvariantCulture));
         }
         string body = lines.Count > 0 ? "[table=2]" + string.Join("", lines) + "[/table]" :
             view.Loading ? "Loading statistics…" : view.Data != null ? "No samples for this item." : "Statistics unavailable.";
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
         string difficulty = scope.Contains("a10") ? "A10" : "All ascensions";
-        string version = scope.LastOrDefault(x => x.StartsWith('v')) ?? "All patches";
-        string age = view.SavedAt is { } saved ? saved.ToString("MMM d", CultureInfo.InvariantCulture) : "";
-        string cache = view.Offline && view.Data != null ? "  Cached" : "";
-        return body + $"\n[font_size=16][color=#b3c0c2]{players}  {difficulty}\n{version}  {age}{cache}\nSpire Codex[/color][/font_size]";
+        string cache = view.Offline && view.Data != null ? "\nCached statistics" : "";
+        return body + $"\n[font_size=16][color=#b3c0c2][table=2][cell expand=2 shrink=false]Spire Codex[/cell][cell expand=3 shrink=false][right]{players} / {difficulty}[/right][/cell][/table]{cache}[/color][/font_size]";
 
-        void Add(string label, double? value)
+        void Add(string label, double? value, long samples = 0, string unit = "")
         {
-            if (value.HasValue) Row(label, value.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%");
+            if (!value.HasValue) return;
+            string count = samples > 0 ? $"\n[font_size=16][color=#b3c0c2]{samples.ToString("N0", CultureInfo.InvariantCulture)} {unit}[/color][/font_size]" : "";
+            int size = samples > 0 ? 28 : 22;
+            string percentage = value.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+            lines.Add($"[cell expand=1 shrink=false][font_size=22]{label}[/font_size]{count}[/cell][cell expand=1 shrink=false][right][font_size={size}][color=#f2d68d]{percentage}[/color][/font_size][/right][/cell]");
         }
-
-        void Row(string label, string value) => lines.Add($"[cell expand=1 shrink=false]{label}[/cell][cell expand=1 shrink=false][right][color=#f2d68d]{value}[/color][/right][/cell]");
     }
 }

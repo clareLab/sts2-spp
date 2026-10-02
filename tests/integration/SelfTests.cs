@@ -60,9 +60,9 @@ internal static class SelfTests
             var holder = screen.GetCardHolder(cards[0]);
             AccessTools.Method(typeof(NCardHolder), "CreateHoverTips").Invoke(holder, null);
             await Frames(3);
+            await Screenshot("card");
             Validate("card");
             Check(Panels().Single().GetNode<RichTextLabel>("%Description").Text.Contains("Pick rate"), "native card tooltip contains pick rate");
-            await Screenshot("card");
             NHoverTipSet.Clear();
             NOverlayStack.Instance!.Remove(screen);
             await Frames(5);
@@ -71,9 +71,9 @@ internal static class SelfTests
             var relicHolder = Descendants(relicScreen).OfType<NRelicBasicHolder>().First();
             AccessTools.Method(typeof(NRelicBasicHolder), "OnFocus").Invoke(relicHolder, null);
             await Frames(3);
+            await Screenshot("relic");
             Validate("relic");
             Check(!Panels().Single().GetNode<RichTextLabel>("%Description").Text.Contains("Pick rate"), "relic tooltip omits unavailable pick rate");
-            await Screenshot("relic");
             NHoverTipSet.Clear();
             await Frames(3);
             Check(!Panels().Any(), "statistics disappear with native tooltips");
@@ -95,13 +95,13 @@ internal static class SelfTests
     {
         var panel = Panels().Single();
         var label = panel.GetNode<RichTextLabel>("%Description");
-        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("v0.111.0"), name + " tooltip shows source and version");
+        GD.Print($"[spp] {name} panel {panel.GetGlobalRect()}, text {label.Size}, content {label.GetContentWidth()} x {label.GetContentHeight()}");
+        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo / All ascensions"), name + " tooltip shows source and population");
         Check(label.GetContentHeight() <= label.Size.Y + 2, name + " tooltip text is not clipped");
         Check(label.GetContentWidth() >= label.Size.X - 15 && label.GetContentWidth() <= label.Size.X + 2, name + " statistics use the available width");
         var rectangle = panel.GetGlobalRect();
         Check(rectangle.Position.X >= -1 && rectangle.Position.Y >= -1 && rectangle.End.X <= panel.GetViewportRect().Size.X + 1 && rectangle.End.Y <= panel.GetViewportRect().Size.Y + 1,
             name + " tooltip stays inside the viewport");
-        GD.Print($"[spp] {name} panel {rectangle}, text {label.Size}, content {label.GetContentHeight()}");
     }
 
     private static IEnumerable<Control> Panels() => Descendants(NGame.Instance!.HoverTipsContainer!).OfType<Control>().Where(n => n.Name == "SppStatistics");

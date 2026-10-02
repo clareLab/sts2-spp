@@ -72,6 +72,8 @@ internal static class StatsHover
             var label = panel.GetNode<RichTextLabel>("%Description");
             panel.Name = "SppStatistics";
             label.AutowrapMode = TextServer.AutowrapMode.Word;
+            label.AddThemeConstantOverride("table_h_separation", 0);
+            label.AddThemeConstantOverride("table_v_separation", 8);
             Active.Add(new LiveTip(__result, owner, panel, label, __state, alignment));
         }
         catch (Exception error) { Disable(error); }

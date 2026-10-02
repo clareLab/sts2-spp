@@ -34,7 +34,7 @@ internal sealed class StatsCache : IDisposable
         _http = client ?? new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All });
         _http.Timeout = TimeSpan.FromSeconds(12);
         _http.MaxResponseContentBufferSize = MaxBytes;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("StatsPlusPlus/0.1.0 (+https://github.com/clareLab/sts2-spp)");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("StatsPlusPlus/0.1.1 (+https://github.com/clareLab/sts2-spp)");
         _http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 
