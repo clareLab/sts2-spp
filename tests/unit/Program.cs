@@ -32,9 +32,9 @@ try
     var zero = Statistics.Parse(payload.Replace("\"offered\":1000", "\"offered\":0").Replace("\"picked\":100", "\"picked\":0"), "cards", scope);
     Check(zero.Items["BASH"].PickRate == null, "missing offers do not become zero percent");
     string? text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
-    Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0") && text.Contains(" %"), "keep measured zero percentages");
+    Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0") && text.Contains("\u00a0%"), "keep measured zero percentages");
     Check(text != null && text.Contains("A10") && text.Contains("Solo") && !text.Contains(" / "), "keep ascension and party size in separate cells");
-    Check(text != null && text.Contains("Win rate Δ") && text.Contains("+5.0") && text.Contains(" pp") && !text.Contains("25.0"), "show percentage-point delta instead of absolute win rate");
+    Check(text != null && text.Contains("Win rate Δ") && text.Contains("+5.0") && text.Contains("\u00a0pp") && !text.Contains("25.0"), "show percentage-point delta instead of absolute win rate");
     var equal = data with { BaselineWinRate = 25 };
     Check(StatsText.Render(new(equal, now, false, false), "BASH", false, 0, scope)?.Contains("]0.0[") == true, "keep neutral deltas unsigned");
     var lower = data with { BaselineWinRate = 27.34 };

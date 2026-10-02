@@ -103,7 +103,7 @@ internal static class StatsText
             string color = PercentageColor(delta ? 50 + rounded * 2.5 : rounded);
             string number = Numeric($"[font_size=22][color={color}]{percentage}[/color][/font_size]{sampleCount}");
             string suffix = delta ? "pp" : "%";
-            lines.Add($"[cell expand=3 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=2 shrink=false][right]{number}[/right][/cell][cell][font_size=22][color={color}] {suffix}[/color][/font_size][/cell]");
+            lines.Add($"[cell expand=4 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=3 shrink=false][right]{number}[/right][/cell][cell expand=1 shrink=false][font_size=22][color={color}]\u00a0{suffix}[/color][/font_size][/cell]");
         }
 
         static string Secondary(string text) => $"\n[font_size=16][color=#b3c0c2]{text}[/color][/font_size]";
