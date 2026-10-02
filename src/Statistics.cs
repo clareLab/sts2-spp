@@ -89,7 +89,7 @@ internal static class StatsText
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
         string difficulty = scope.FirstOrDefault(s => s.Length > 1 && s[0] == 'a' && int.TryParse(s.AsSpan(1), out _))?.ToUpperInvariant() ?? "All ascensions";
-        string cache = view.Offline && view.Data != null ? Secondary("Cached statistics") : "";
+        string cache = view.Offline && view.SavedAt.HasValue ? Secondary("Cached statistics") : "";
         string population = $"[font_size=16][color=#b3c0c2][table=2][cell expand=1 shrink=false]{difficulty}[/cell][cell expand=1 shrink=false][right]{players}[/right][/cell][/table][/color][/font_size]";
         return population + "\n" + body + cache;
 
