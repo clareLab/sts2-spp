@@ -10,13 +10,18 @@ string payload = JsonSerializer.Serialize(new
 {
     entity_type = "cards",
     bracket = scope,
+    total_runs = 1000,
     rows = new[] { new { id = "BASH", upgraded = false, picks = 200, wins = 50, offered = 1000, picked = 100, pick_rate = 99, pick_rate_by_act = new double?[] { 12, null, 0 } } }
 });
+string population = JsonSerializer.Serialize(new { total_runs = 1000, total_wins = 200, by_ascension = new[] { new { ascension = 10, runs = 1000, wins = 200 } } });
 
 try
 {
-    var data = Statistics.Parse(payload, "cards", scope);
+    var data = Statistics.Parse(payload, "cards", scope).WithPopulation(population);
     Check(data.Items["BASH"].PickRate == 10 && data.Items["BASH"].WinRate == 25, "derive rates from the correct denominators");
+    Check(data.BaselineWinRate == 20, "derive the baseline from overall runs rather than entity-weighted rates");
+    Reject(() => data.WithPopulation(population.Replace("1000", "1001")), "reject mismatched baseline sample counts");
+    Reject(() => data.WithPopulation(population.Replace("\"ascension\":10", "\"ascension\":0")), "reject a baseline from another ascension");
     Reject(() => Statistics.Parse(payload, "cards", "solo:a10"), "reject a mismatched data bracket");
     Reject(() => Statistics.Parse(payload, "cards", "solo:a5:v0.111.0"), "never show A10 statistics for another ascension");
     Reject(() => Statistics.Parse(payload, "cards", "2p:a10:v0.111.0"), "never mix solo and multiplayer statistics");
@@ -27,8 +32,14 @@ try
     var zero = Statistics.Parse(payload.Replace("\"offered\":1000", "\"offered\":0").Replace("\"picked\":100", "\"picked\":0"), "cards", scope);
     Check(zero.Items["BASH"].PickRate == null, "missing offers do not become zero percent");
     string? text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
-    Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0%"), "keep measured zero percentages");
+    Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0") && text.Contains(" %"), "keep measured zero percentages");
     Check(text != null && text.Contains("A10") && text.Contains("Solo") && !text.Contains(" / "), "keep ascension and party size in separate cells");
+    Check(text != null && text.Contains("Win rate Δ") && text.Contains("+5.0") && text.Contains(" pp") && !text.Contains("25.0"), "show percentage-point delta instead of absolute win rate");
+    var equal = data with { BaselineWinRate = 25 };
+    Check(StatsText.Render(new(equal, now, false, false), "BASH", false, 0, scope)?.Contains("]0.0[") == true, "keep neutral deltas unsigned");
+    var lower = data with { BaselineWinRate = 27.34 };
+    Check(StatsText.Render(new(lower, now, false, false), "BASH", false, 0, scope)?.Contains("−2.3") == true, "show a negative delta with aligned decimal precision");
+    Check(StatsText.Render(new(data with { BaselineWinRate = null }, now, false, false), "BASH", false, 0, scope)?.Contains("Win rate") == false, "omit win delta without a valid baseline");
     Check(StatsText.Render(new(data, now, false, false), "BASH", false, 1, scope)?.Contains("Act 2 pick") == false, "omit unknown act rates");
     Check(StatsText.Render(new(data, now, false, true), "BASH", true, 0, scope)?.Contains("Cached") == true, "label offline snapshots");
     Check(StatsText.Render(new(data, now, false, false), "UNKNOWN", false, 0, scope) == null, "hide items without samples");
@@ -36,17 +47,17 @@ try
     Check(StatsText.Render(new(null, null, true, false), "BASH", false, 0, scope) == null, "hide loading placeholders without samples");
 
     var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-    var handler = new Stub(async _ => { await gate.Task; return Json(payload); });
+    var handler = new Stub(async request => { await gate.Task; return Json(request.RequestUri!.AbsolutePath.Contains("community-stats") ? population : payload); });
     using (var cache = new StatsCache(directory, new HttpClient(handler), () => now))
     {
         for (int i = 0; i < 100; i++) cache.Get("cards", scope);
         gate.SetResult();
         var view = await Wait(cache);
-        Check(handler.Calls == 1 && view.Data != null, "coalesce concurrent hover requests");
+        Check(handler.Calls == 2 && view.Data?.BaselineWinRate == 20, "coalesce concurrent hover requests and cache the matching baseline");
         Check(handler.LastUri?.Query.Contains("solo%3Aa10%3Av0.111.0", StringComparison.OrdinalIgnoreCase) == true, "send the exact A10 and version bracket");
         await Until(() => Directory.Exists(directory) && Directory.GetFiles(directory, "*.json").Length == 1);
         for (int i = 0; i < 20; i++) cache.Get("cards", scope);
-        Check(handler.Calls == 1, "reuse fresh statistics without network traffic");
+        Check(handler.Calls == 2, "reuse fresh statistics without network traffic");
         handler.Response = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         now += TimeSpan.FromHours(7);
         view = await Wait(cache);
@@ -63,7 +74,7 @@ try
         Check(view.Data != null && offline.Calls == 0, "load a fresh disk cache without contacting the service");
     }
     foreach (string file in Directory.GetFiles(directory, "*.json")) File.WriteAllText(file, "corrupt");
-    using (var cache = new StatsCache(directory, new HttpClient(new Stub(_ => Task.FromResult(Json(payload)))), () => now))
+    using (var cache = new StatsCache(directory, new HttpClient(new Stub(request => Task.FromResult(Json(request.RequestUri!.AbsolutePath.Contains("community-stats") ? population : payload)))), () => now))
         Check((await Wait(cache)).Data != null, "recover from a corrupt cache");
     var limited = new Stub(_ =>
     {
@@ -77,6 +88,13 @@ try
         now += TimeSpan.FromMinutes(30);
         cache.Get("cards", scope);
         Check(limited.Calls == 1, "honor Retry-After");
+    }
+    var mismatch = new Stub(request => Task.FromResult(Json(request.RequestUri!.AbsolutePath.Contains("community-stats") ? population.Replace("1000", "1001") : payload)));
+    using (var cache = new StatsCache(directory + "-mismatch", new HttpClient(mismatch), () => now))
+    {
+        var view = await Wait(cache);
+        Check(view.Offline && view.Data?.Items["BASH"].PickRate == 10 && view.Data.BaselineWinRate == null,
+            "baseline failure preserves valid pick rates without inventing a win delta");
     }
     Console.WriteLine($"PASS {passed} statistics and cache checks");
 }

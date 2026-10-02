@@ -136,6 +136,7 @@ internal static class SelfTests
         var label = panel.GetNode<RichTextLabel>("%Description");
         GD.Print($"[spp] {name} panel {panel.GetGlobalRect()}, text {label.Size}, content {label.GetContentWidth()} x {label.GetContentHeight()}");
         Check(!label.Text.Contains("Spire Codex") && label.Text.Contains("Solo") && label.Text.Contains("A10") && !label.Text.Contains(" / "), name + " tooltip keeps separate scope labels without a footer");
+        Check(label.Text.Contains("Win rate Δ") && label.Text.Contains(" pp"), name + " tooltip uses the matching A10 population baseline");
         Check(label.GetContentHeight() <= label.Size.Y + 2, name + " tooltip text is not clipped");
         Check(label.GetContentWidth() >= label.Size.X - 15 && label.GetContentWidth() <= label.Size.X + 2, name + " statistics use the available width");
         var rectangle = panel.GetGlobalRect();
@@ -168,6 +169,7 @@ internal static class SelfTests
         {
             entity_type = "cards",
             bracket,
+            total_runs = 1000,
             rows = new[] { new { id = holder.CardModel!.Id.Entry, picks = 200, wins = 50, offered = 1000, picked = 100 } }
         }));
         string path = ProjectSettings.GlobalizePath("user://spp-loading-" + Guid.NewGuid());
@@ -184,7 +186,7 @@ internal static class SelfTests
             await Screenshot("loading");
             gate.SetResult();
             for (int i = 0; i < 300 && spinner.Visible; i++) await Frames(1);
-            Check(!spinner.Visible && panel.GetNode<RichTextLabel>("%Description").Text.Contains("25.0%"),
+            Check(!spinner.Visible && panel.GetNode<RichTextLabel>("%Description").Text.Contains("+5.0"),
                 "completed statistics replace the spinner without another hover");
         }
         finally
@@ -200,7 +202,8 @@ internal static class SelfTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             await ready.WaitAsync(cancellationToken);
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(payload) };
+            string body = request.RequestUri!.AbsolutePath.Contains("community-stats") ? "{\"total_runs\":1000,\"total_wins\":200,\"by_ascension\":[{\"ascension\":10,\"runs\":1000,\"wins\":200}]}" : payload;
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
 

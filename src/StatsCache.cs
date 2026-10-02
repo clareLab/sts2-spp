@@ -18,7 +18,7 @@ internal sealed class StatsCache : IDisposable
         internal bool DiskRead;
     }
 
-    private sealed record Stored(DateTimeOffset SavedAt, string Payload);
+    private sealed record Stored(DateTimeOffset SavedAt, string Payload, string? Population);
     private readonly ConcurrentDictionary<string, Slot> _slots = new();
     private readonly HttpClient _http;
     private readonly string _directory;
@@ -34,7 +34,7 @@ internal sealed class StatsCache : IDisposable
         _http = client ?? new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All });
         _http.Timeout = TimeSpan.FromSeconds(12);
         _http.MaxResponseContentBufferSize = MaxBytes;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("StatsPlusPlus/0.1.4 (+https://github.com/clareLab/sts2-spp)");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("StatsPlusPlus/0.1.5 (+https://github.com/clareLab/sts2-spp)");
         _http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     }
 
@@ -57,6 +57,7 @@ internal sealed class StatsCache : IDisposable
     {
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(kind + ":" + bracket)));
         string file = Path.Combine(_directory, key + ".json");
+        Statistics? incoming = null;
         try
         {
             if (!slot.DiskRead)
@@ -70,7 +71,8 @@ internal sealed class StatsCache : IDisposable
                         if (stored != null && stored.SavedAt <= _clock().AddMinutes(5))
                         {
                             var data = Statistics.Parse(stored.Payload, kind, bracket);
-                            bool fresh = _clock() - stored.SavedAt < Lifetime;
+                            if (stored.Population != null) data = data.WithPopulation(stored.Population);
+                            bool fresh = data.BaselineWinRate.HasValue && _clock() - stored.SavedAt < Lifetime;
                             lock (slot)
                             {
                                 slot.View = new(data, stored.SavedAt, !fresh, false);
@@ -92,7 +94,17 @@ internal sealed class StatsCache : IDisposable
             }
             response.EnsureSuccessStatusCode();
             string payload = await response.Content.ReadAsStringAsync(_shutdown.Token).ConfigureAwait(false);
-            var snapshot = Statistics.Parse(payload, kind, bracket);
+            incoming = Statistics.Parse(payload, kind, bracket);
+            using var populationResponse = await _http.GetAsync($"https://spire-codex.com/api/runs/community-stats?bracket={Uri.EscapeDataString(bracket)}", _shutdown.Token).ConfigureAwait(false);
+            if (populationResponse.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                var retry = populationResponse.Headers.RetryAfter?.Date ?? _clock() + (populationResponse.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(15));
+                Fail(slot, retry > _clock().AddMinutes(1) ? retry : _clock().AddMinutes(1), incoming);
+                return;
+            }
+            populationResponse.EnsureSuccessStatusCode();
+            string population = await populationResponse.Content.ReadAsStringAsync(_shutdown.Token).ConfigureAwait(false);
+            var snapshot = incoming.WithPopulation(population);
             var now = _clock();
             lock (slot)
             {
@@ -102,19 +114,19 @@ internal sealed class StatsCache : IDisposable
             try
             {
                 Directory.CreateDirectory(_directory);
-                await File.WriteAllTextAsync(file + ".tmp", JsonSerializer.Serialize(new Stored(now, payload)), _shutdown.Token).ConfigureAwait(false);
+                await File.WriteAllTextAsync(file + ".tmp", JsonSerializer.Serialize(new Stored(now, payload, population)), _shutdown.Token).ConfigureAwait(false);
                 File.Move(file + ".tmp", file, true);
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
         }
-        catch (Exception) { Fail(slot, _clock().AddMinutes(15)); }
+        catch (Exception) { Fail(slot, _clock().AddMinutes(15), incoming); }
     }
 
-    private static void Fail(Slot slot, DateTimeOffset retry)
+    private static void Fail(Slot slot, DateTimeOffset retry, Statistics? incoming = null)
     {
         lock (slot)
         {
-            slot.View = slot.View with { Loading = false, Offline = true };
+            slot.View = slot.View with { Data = slot.View.Data ?? incoming, Loading = false, Offline = true };
             slot.NextAttempt = retry;
         }
     }

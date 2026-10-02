@@ -90,6 +90,7 @@ internal static class StatsHover
     private static string? Text(Request request)
     {
         var view = Cache.Get(request.Kind, request.Bracket);
+        if (view.Loading && view.Data?.BaselineWinRate == null && (view.Data == null || view.Data.Items.ContainsKey(request.Id) || view.Data.Items.ContainsKey(request.Id + "+"))) return " ";
         return StatsText.Render(view, request.Id, request.Upgraded, request.Act, request.Bracket) ?? (view.Loading && view.Data == null ? " " : null);
     }
 
