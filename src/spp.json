@@ -3,7 +3,7 @@
   "name": "Stats ++",
   "author": "clareLab",
   "description": "Card and relic statistics in native tooltips. Data from Spire Codex.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "min_game_version": "0.111.0",
   "has_dll": true,
   "has_pck": false,

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Cards;
+using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Cards;
@@ -14,6 +15,7 @@ using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 
@@ -45,15 +47,18 @@ internal static class SelfTests
                 throw new InvalidOperationException("An isolated test sandbox is required.");
             await Frames(3);
             SaveManager.Instance.SetFtuesEnabled(false);
+            ValidateNumbers();
             string bracket = StatsHover.Scope();
+            Check(bracket.Split(':').Contains("a10"), "request A10 statistics before a run starts");
             for (int i = 0; i < 1200 && (StatsHover.Cache.Get("cards", bracket).Loading || StatsHover.Cache.Get("relics", bracket).Loading); i++) await Frames(1);
             Check(StatsHover.Cache.Get("cards", bracket).Data?.Items.Count > 0, "live card statistics loaded");
             Check(StatsHover.Cache.Get("relics", bracket).Data?.Items.Count > 0, "live relic statistics loaded");
             var run = await NGame.Instance!.StartNewSingleplayerRun(ModelDb.Character<Ironclad>(), true,
                 ActModel.GetDefaultList(), [], "SPP-PREVIEW-001", GameMode.Standard);
+            Check(run.AscensionLevel != 10 && StatsHover.Scope() == bracket, "keep A10 statistics during a lower-ascension run");
             await RunManager.Instance.EnterMapCoord(run.Map!.GetAllMapPoints().Where(p => p.PointType == MapPointType.Monster).OrderBy(p => p.coord.row).First().coord);
             await Frames(3);
-            var cards = new CardModel[] { ModelDb.Card<PommelStrike>().ToMutable(), ModelDb.Card<ShrugItOff>().ToMutable(), ModelDb.Card<BattleTrance>().ToMutable() };
+            var cards = new CardModel[] { ModelDb.Card<PommelStrike>().ToMutable(), ModelDb.Card<ShrugItOff>().ToMutable(), ModelDb.Card<DefendIronclad>().ToMutable() };
             foreach (var card in cards) card.Owner = run.Players[0];
             var screen = NCardRewardSelectionScreen.ShowScreen(cards.Select(c => new CardCreationResult(c)).ToArray(), [])!;
             await Delay(1);
@@ -64,8 +69,20 @@ internal static class SelfTests
             Validate("card");
             Check(Panels().Single().GetNode<RichTextLabel>("%Description").Text.Contains("Pick rate"), "native card tooltip contains pick rate");
             NHoverTipSet.Clear();
+            AccessTools.Method(typeof(NCardHolder), "CreateHoverTips").Invoke(screen.GetCardHolder(cards[2]), null);
+            await Frames(3);
+            Check(!Panels().Any(), "starter cards without samples have no statistics panel");
+            Check(Descendants(NGame.Instance.HoverTipsContainer!).OfType<RichTextLabel>().Any(), "native keyword tooltips remain without statistics");
+            NHoverTipSet.Clear();
             NOverlayStack.Instance!.Remove(screen);
             await Frames(5);
+            var inspect = NGame.Instance.GetInspectCardScreen();
+            inspect.Open([cards[0]], 0);
+            await Delay(0.5);
+            Validate("card inspection");
+            inspect.Close();
+            NHoverTipSet.Clear();
+            await Frames(3);
             var relicScreen = NChooseARelicSelection.ShowScreen([ModelDb.Relic<BagOfPreparation>().ToMutable(), ModelDb.Relic<Anchor>().ToMutable(), ModelDb.Relic<Shovel>().ToMutable()])!;
             await Delay(1);
             var relicHolder = Descendants(relicScreen).OfType<NRelicBasicHolder>().First();
@@ -77,6 +94,26 @@ internal static class SelfTests
             NHoverTipSet.Clear();
             await Frames(3);
             Check(!Panels().Any(), "statistics disappear with native tooltips");
+            NOverlayStack.Instance!.Remove(relicScreen);
+            await RunManager.Instance.EnterMapCoord(run.Map.GetAllMapPoints().First(p => p.PointType == MapPointType.Shop).coord);
+            var merchant = NRun.Instance!.MerchantRoom!;
+            merchant.OpenInventory();
+            await Delay(1);
+            var shopCard = Descendants(merchant.Inventory).OfType<NMerchantCard>().First(node =>
+                node.Entry is MerchantCardEntry { CreationResult.Card: { } card } &&
+                StatsText.Render(StatsHover.Cache.Get("cards", bracket), card.Id.Entry, card.IsUpgraded, run.CurrentActIndex, bracket) != null);
+            AccessTools.Method(typeof(NMerchantCard), "CreateHoverTip").Invoke(shopCard, null);
+            await Frames(3);
+            await Screenshot("shop-card");
+            Validate("shop card");
+            NHoverTipSet.Clear();
+            var shopRelic = Descendants(merchant.Inventory).OfType<NMerchantRelic>().First(node =>
+                node.Entry is MerchantRelicEntry { Model: { } relic } &&
+                StatsText.Render(StatsHover.Cache.Get("relics", bracket), relic.Id.Entry, false, run.CurrentActIndex, bracket) != null);
+            AccessTools.Method(typeof(NMerchantRelic), "CreateHoverTip").Invoke(shopRelic, null);
+            await Frames(3);
+            Validate("shop relic");
+            NHoverTipSet.Clear();
             GD.Print("[spp] SELFTEST_OK");
         }
         catch (Exception exception)
@@ -96,12 +133,29 @@ internal static class SelfTests
         var panel = Panels().Single();
         var label = panel.GetNode<RichTextLabel>("%Description");
         GD.Print($"[spp] {name} panel {panel.GetGlobalRect()}, text {label.Size}, content {label.GetContentWidth()} x {label.GetContentHeight()}");
-        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo / All ascensions"), name + " tooltip shows source and population");
+        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo / A10"), name + " tooltip shows source and population");
         Check(label.GetContentHeight() <= label.Size.Y + 2, name + " tooltip text is not clipped");
         Check(label.GetContentWidth() >= label.Size.X - 15 && label.GetContentWidth() <= label.Size.X + 2, name + " statistics use the available width");
         var rectangle = panel.GetGlobalRect();
         Check(rectangle.Position.X >= -1 && rectangle.Position.Y >= -1 && rectangle.End.X <= panel.GetViewportRect().Size.X + 1 && rectangle.End.Y <= panel.GetViewportRect().Size.Y + 1,
             name + " tooltip stays inside the viewport");
+    }
+
+    private static void ValidateNumbers()
+    {
+        using var scene = ResourceLoader.Load<PackedScene>("res://scenes/ui/hover_tip.tscn").Instantiate<Control>();
+        using var probe = new RichTextLabel { BbcodeEnabled = true, AutowrapMode = TextServer.AutowrapMode.Off, Size = new Vector2(500, 100), Visible = false };
+        probe.AddThemeFontOverride("normal_font", scene.GetNode<RichTextLabel>("%Description").GetThemeFont("normal_font"));
+        ((SceneTree)Engine.GetMainLoop()).Root.AddChild(probe);
+        foreach (int size in new[] { 16, 22 })
+        {
+            var widths = Enumerable.Range(0, 10).Select(digit =>
+            {
+                probe.Text = $"[font_size={size}]{StatsText.Numeric(new string((char)('0' + digit), 6))}[/font_size]";
+                return probe.GetContentWidth();
+            }).ToArray();
+            Check(widths.Min() > 0 && widths.Max() - widths.Min() <= 1, $"equal digit advances at {size}px");
+        }
     }
 
     private static IEnumerable<Control> Panels() => Descendants(NGame.Instance!.HoverTipsContainer!).OfType<Control>().Where(n => n.Name == "SppStatistics");

@@ -36,9 +36,8 @@ internal static class StatsHover
     {
         var run = RunManager.Instance.DebugOnlyGetState();
         string players = run?.Players.Count is > 1 ? run.Players.Count + "p" : "solo";
-        string difficulty = run?.AscensionLevel == 10 ? ":a10" : "";
         string? version = ReleaseInfoManager.Instance.ReleaseInfo?.Version;
-        return players + difficulty + (version != null && System.Text.RegularExpressions.Regex.IsMatch(version, @"^v?\d+\.\d+\.\d+$") ? ":v" + version.TrimStart('v') : "");
+        return players + ":a10" + (version != null && System.Text.RegularExpressions.Regex.IsMatch(version, @"^v?\d+\.\d+\.\d+$") ? ":v" + version.TrimStart('v') : "");
     }
 
     private static void Prefix(Control owner, ref IEnumerable<IHoverTip> hoverTips, out Request? __state)
@@ -49,14 +48,16 @@ internal static class StatsHover
         {
             var tips = hoverTips.ToArray();
             if (tips.Any(t => t.Id.StartsWith("spp:", StringComparison.Ordinal))) return;
-            AbstractModel? model = owner is NCardHolder holder ? holder.CardModel :
-                tips.Select(t => t.CanonicalModel).FirstOrDefault(m => m is RelicModel);
+            AbstractModel? model = (hoverTips as ModelTips)?.Model ?? (owner is NCardHolder holder ? holder.CardModel :
+                tips.Select(t => t.CanonicalModel).FirstOrDefault(m => m is CardModel or RelicModel));
             if (model is not (CardModel or RelicModel)) return;
             var request = new Request(model is CardModel ? "cards" : "relics", model.Id.Entry,
                 model is CardModel card && card.IsUpgraded, RunManager.Instance.DebugOnlyGetState()?.CurrentActIndex ?? -1, Scope());
+            string? text = Text(request);
+            if (text == null) return;
             var table = LocManager.Instance.GetTable("static_hover_tips");
             if (!table.HasEntry(TitleKey)) table.MergeWith(new Dictionary<string, string> { [TitleKey] = "Stats ++" });
-            var tip = new HoverTip(new LocString("static_hover_tips", TitleKey), Text(request)) { Id = "spp:" + request.Kind + ":" + request.Id };
+            var tip = new HoverTip(new LocString("static_hover_tips", TitleKey), text) { Id = "spp:" + request.Kind + ":" + request.Id };
             hoverTips = tips.Append(tip).ToArray();
             __state = request;
         }
@@ -72,14 +73,15 @@ internal static class StatsHover
             var label = panel.GetNode<RichTextLabel>("%Description");
             panel.Name = "SppStatistics";
             label.AutowrapMode = TextServer.AutowrapMode.Word;
+            label.AddThemeFontOverride("normal_font", ResourceLoader.Load<Font>(StatsText.NumberFont));
             label.AddThemeConstantOverride("table_h_separation", 0);
-            label.AddThemeConstantOverride("table_v_separation", 8);
+            label.AddThemeConstantOverride("table_v_separation", 6);
             Active.Add(new LiveTip(__result, owner, panel, label, __state, alignment));
         }
         catch (Exception error) { Disable(error); }
     }
 
-    private static string Text(Request request) => StatsText.Render(Cache.Get(request.Kind, request.Bracket), request.Id, request.Upgraded, request.Act, request.Bracket);
+    private static string? Text(Request request) => StatsText.Render(Cache.Get(request.Kind, request.Bracket), request.Id, request.Upgraded, request.Act, request.Bracket);
 
     private static void Tick()
     {
@@ -90,12 +92,14 @@ internal static class StatsHover
             Active.RemoveAll(t => !GodotObject.IsInstanceValid(t.Set) || t.Set.IsQueuedForDeletion() || !GodotObject.IsInstanceValid(t.Owner));
             foreach (var tip in Active)
             {
-                string text = Text(tip.Request);
-                if (tip.Label.Text == text) continue;
-                tip.Label.Text = text;
+                string? text = Text(tip.Request);
+                bool visible = text != null;
+                if (tip.Panel.Visible == visible && (!visible || tip.Label.Text == text)) continue;
+                tip.Panel.Visible = visible;
+                if (text != null) tip.Label.Text = text;
                 tip.Panel.ResetSize();
                 var flow = tip.Set.GetNode<Control>("textHoverTipContainer");
-                float height = flow.GetChildren().OfType<Control>().Sum(p => p.GetCombinedMinimumSize().Y + 5);
+                float height = flow.GetChildren().OfType<Control>().Where(p => p.Visible).Sum(p => p.GetCombinedMinimumSize().Y + 5);
                 flow.Size = new Vector2(360, Math.Min(height, tip.Set.GetViewportRect().Size.Y - 50));
                 if (tip.Owner is NCardHolder holder) tip.Set.SetAlignmentForCardHolder(holder);
                 else if (tip.Owner is NRelicBasicHolder relic) tip.Set.SetAlignmentForRelic(relic.Relic);

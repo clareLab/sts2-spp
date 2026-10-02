@@ -60,3 +60,4 @@ print(f"PASS {len(report['passed'])} isolated game checks")
 PY
 cp "$sandbox_dir/userdata/SlayTheSpire2/spp-card.png" artifacts/validation/card.png
 cp "$sandbox_dir/userdata/SlayTheSpire2/spp-relic.png" artifacts/validation/relic.png
+cp "$sandbox_dir/userdata/SlayTheSpire2/spp-shop-card.png" artifacts/validation/shop-card.png

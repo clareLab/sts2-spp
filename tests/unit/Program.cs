@@ -5,7 +5,7 @@ using spp;
 int passed = 0;
 string directory = Path.Combine(Path.GetTempPath(), "spp-test-" + Guid.NewGuid());
 var now = DateTimeOffset.UtcNow;
-const string scope = "solo:v0.111.0";
+const string scope = "solo:a10:v0.111.0";
 string payload = JsonSerializer.Serialize(new
 {
     entity_type = "cards",
@@ -18,17 +18,19 @@ try
     var data = Statistics.Parse(payload, "cards", scope);
     Check(data.Items["BASH"].PickRate == 10 && data.Items["BASH"].WinRate == 25, "derive rates from the correct denominators");
     Reject(() => Statistics.Parse(payload, "cards", "solo:a10"), "reject a mismatched data bracket");
+    Reject(() => Statistics.Parse(payload.Replace("solo:a10:", "solo:"), "cards", scope), "reject all-ascension data for an A10 request");
     Reject(() => Statistics.Parse(payload, "relics", scope), "reject mismatched entity data");
     Reject(() => Statistics.Parse("<html>error</html>", "cards", scope), "reject non-JSON responses");
     Reject(() => Statistics.Parse(payload.Replace("\"picks\":200", "\"picks\":-1"), "cards", scope), "reject negative counts");
     var zero = Statistics.Parse(payload.Replace("\"offered\":1000", "\"offered\":0").Replace("\"picked\":100", "\"picked\":0"), "cards", scope);
     Check(zero.Items["BASH"].PickRate == null, "missing offers do not become zero percent");
-    string text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
-    Check(text.Contains("Act 3 pick") && text.Contains("0.0%"), "keep measured zero percentages");
-    Check(!StatsText.Render(new(data, now, false, false), "BASH", false, 1, scope).Contains("Act 2 pick"), "omit unknown act rates");
-    Check(StatsText.Render(new(data, now, false, true), "BASH", true, 0, scope).Contains("Cached"), "label offline snapshots");
-    Check(StatsText.Render(new(data, now, false, false), "UNKNOWN", false, 0, scope).Contains("No samples"), "unknown items do not receive fabricated statistics");
-    Check(!StatsText.Render(new(null, null, false, true), "BASH", false, 0, scope).Contains("0.0%"), "offline without cache is unavailable");
+    string? text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
+    Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0%"), "keep measured zero percentages");
+    Check(StatsText.Render(new(data, now, false, false), "BASH", false, 1, scope)?.Contains("Act 2 pick") == false, "omit unknown act rates");
+    Check(StatsText.Render(new(data, now, false, true), "BASH", true, 0, scope)?.Contains("Cached") == true, "label offline snapshots");
+    Check(StatsText.Render(new(data, now, false, false), "UNKNOWN", false, 0, scope) == null, "hide items without samples");
+    Check(StatsText.Render(new(null, null, false, true), "BASH", false, 0, scope) == null, "hide unavailable statistics without cache");
+    Check(StatsText.Render(new(null, null, true, false), "BASH", false, 0, scope) == null, "hide loading placeholders without samples");
 
     var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     var handler = new Stub(async _ => { await gate.Task; return Json(payload); });
@@ -38,7 +40,7 @@ try
         gate.SetResult();
         var view = await Wait(cache);
         Check(handler.Calls == 1 && view.Data != null, "coalesce concurrent hover requests");
-        Check(handler.LastUri?.Query.Contains("solo%3Av0.111.0", StringComparison.OrdinalIgnoreCase) == true, "send the exact version bracket");
+        Check(handler.LastUri?.Query.Contains("solo%3Aa10%3Av0.111.0", StringComparison.OrdinalIgnoreCase) == true, "send the exact A10 and version bracket");
         await Until(() => Directory.Exists(directory) && Directory.GetFiles(directory, "*.json").Length == 1);
         for (int i = 0; i < 20; i++) cache.Get("cards", scope);
         Check(handler.Calls == 1, "reuse fresh statistics without network traffic");

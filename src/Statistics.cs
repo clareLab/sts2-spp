@@ -57,7 +57,9 @@ internal sealed record Statistics(string Kind, string Bracket, Dictionary<string
 
 internal static class StatsText
 {
-    internal static string Render(CacheView view, string id, bool upgraded, int act, string bracket)
+    internal const string NumberFont = "res://fonts/spectral_bold.ttf";
+
+    internal static string? Render(CacheView view, string id, bool upgraded, int act, string bracket)
     {
         var lines = new List<string>();
         ItemStats? item = null;
@@ -65,12 +67,12 @@ internal static class StatsText
         if (item == null) view.Data?.Items.TryGetValue(id, out item);
         if (item != null && (item.Runs > 0 || item.Offered > 0))
         {
-            Add("Win rate", item.WinRate, item.Runs, "runs");
-            Add("Pick rate", item.PickRate, item.Offered, "offers");
+            Add("Win rate", item.WinRate, item.Runs, "Runs");
+            Add("Pick rate", item.PickRate, item.Offered, "Offers");
             if (act is >= 0 and < 3) Add($"Act {act + 1} pick", item.ActPickRates[act]);
         }
-        string body = lines.Count > 0 ? "[table=2]" + string.Join("", lines) + "[/table]" :
-            view.Loading ? "Loading statistics…" : view.Data != null ? "No samples for this item." : "Statistics unavailable.";
+        if (lines.Count == 0) return null;
+        string body = "[table=2]" + string.Join("", lines) + "[/table]";
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
         string difficulty = scope.Contains("a10") ? "A10" : "All ascensions";
@@ -80,10 +82,15 @@ internal static class StatsText
         void Add(string label, double? value, long samples = 0, string unit = "")
         {
             if (!value.HasValue) return;
-            string count = samples > 0 ? $"\n[font_size=16][color=#b3c0c2]{samples.ToString("N0", CultureInfo.InvariantCulture)} {unit}[/color][/font_size]" : "";
-            int size = samples > 0 ? 28 : 22;
+            string sampleLabel = samples > 0 ? Secondary(unit) : "";
+            string sampleCount = samples > 0 ? Secondary(samples.ToString("N0", CultureInfo.InvariantCulture)) : "";
             string percentage = value.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%";
-            lines.Add($"[cell expand=1 shrink=false][font_size=22]{label}[/font_size]{count}[/cell][cell expand=1 shrink=false][right][font_size={size}][color=#f2d68d]{percentage}[/color][/font_size][/right][/cell]");
+            string number = Numeric($"[font_size=22][color=#f2d68d]{percentage}[/color][/font_size]{sampleCount}");
+            lines.Add($"[cell expand=1 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=1 shrink=false][right]{number}[/right][/cell]");
         }
+
+        static string Secondary(string text) => $"\n[font_size=16][color=#b3c0c2]{text}[/color][/font_size]";
     }
+
+    internal static string Numeric(string text) => $"[font={NumberFont}][otf=tnum,lnum,kern=0]{text}[/otf][/font]";
 }
