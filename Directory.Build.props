@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
     <Authors>clareLab</Authors>
+    <RepositoryUrl>https://github.com/clareLab/sts2-spp</RepositoryUrl>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>9.0</AnalysisLevel>

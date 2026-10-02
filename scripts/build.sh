@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/common.sh
 spp_game_paths "${1:-}"
-spp_dotnet build src/spp.csproj -c Release "-p:Sts2DataDir=$data_dir" "-p:BaseLibDll=$baselib"
+spp_dotnet build src/spp.csproj -c Release "-p:Sts2DataDir=$data_dir"
 python3 - <<'PY'
 import hashlib, json
 from pathlib import Path

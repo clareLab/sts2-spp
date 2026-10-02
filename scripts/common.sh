@@ -12,15 +12,4 @@ spp_game_paths() {
   game_dir="${1:-${STS2_DIR:-$HOME/.local/share/Steam/steamapps/common/Slay the Spire 2}}"
   data_dir="${STS2_DATA_DIR:-$game_dir/data_sts2_linuxbsd_x86_64}"
   [[ -f "$data_dir/sts2.dll" ]] || { echo 'sts2.dll not found. Set STS2_DIR or STS2_DATA_DIR.' >&2; return 1; }
-  baselib="${BASELIB_DLL:-$game_dir/mods/BaseLib/BaseLib.dll}"
-  if [[ -z "${BASELIB_DLL:-}" && ! -f "$baselib" ]]; then
-    baselib="$(python3 - "$game_dir" <<'PY'
-import sys
-from pathlib import Path
-root = Path(sys.argv[1]).parent.parent / 'workshop/content/2868840'
-print(next(root.glob('*/BaseLib/BaseLib.dll'), ''))
-PY
-)"
-  fi
-  [[ -f "$baselib" ]] || { echo 'BaseLib.dll not found. Set BASELIB_DLL.' >&2; return 1; }
 }

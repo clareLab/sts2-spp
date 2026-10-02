@@ -2,16 +2,11 @@
   "id": "spp",
   "name": "Stats ++",
   "author": "clareLab",
-  "description": "Community statistics for in-game decisions.",
+  "description": "Card and relic statistics in native tooltips. Data from Spire Codex.",
   "version": "0.1.0",
   "min_game_version": "0.111.0",
   "has_dll": true,
   "has_pck": false,
   "affects_gameplay": false,
-  "dependencies": [
-    {
-      "id": "BaseLib",
-      "min_version": "3.4.7"
-    }
-  ]
+  "dependencies": []
 }

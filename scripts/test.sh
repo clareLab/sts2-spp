@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/common.sh
+spp_dotnet run --project tests/unit/StatsTests.csproj -c Release
 case "${1:-}" in
   --source)
     [[ "$#" == 1 ]] || { echo 'Usage: ./scripts/test.sh [--source|game-directory]' >&2; exit 2; }

@@ -13,8 +13,13 @@
     <Reference Include="sts2"><HintPath>$(Sts2DataDir)/sts2.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="GodotSharp"><HintPath>$(Sts2DataDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="BaseLib"><HintPath>$(BaseLibDll)</HintPath><Private>false</Private></Reference>
   </ItemGroup>
+  <ItemGroup Condition="'$(SppSelfTest)' == 'true'">
+    <Compile Include="../tests/integration/SelfTests.cs" Link="SelfTests.cs" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(SppSelfTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);SPP_SELFTEST</DefineConstants>
+  </PropertyGroup>
   <Target Name="Package" AfterTargets="Build">
     <MakeDir Directories="$(ArtifactsPath)/dist/spp" />
     <Copy SourceFiles="$(TargetPath);$(MSBuildProjectDirectory)/spp.json;$(MSBuildProjectDirectory)/../LICENSE" DestinationFolder="$(ArtifactsPath)/dist/spp" />
