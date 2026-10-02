@@ -15,7 +15,7 @@ namespace spp;
 internal static class StatsHover
 {
     internal sealed record Request(string Kind, string Id, bool Upgraded, int Act, string Bracket);
-    private sealed record LiveTip(NHoverTipSet Set, Control Owner, Control Panel, RichTextLabel Label, Request Request, HoverTipAlignment Alignment);
+    private sealed record LiveTip(NHoverTipSet Set, Control Owner, Control Panel, RichTextLabel Label, Control Spinner, Request Request, HoverTipAlignment Alignment);
     private static readonly List<LiveTip> Active = [];
     internal static StatsCache Cache { get; private set; } = null!;
     private static ulong _nextTick;
@@ -27,9 +27,6 @@ internal static class StatsHover
         Cache = new StatsCache(ProjectSettings.GlobalizePath("user://spp/cache"));
         ((SceneTree)Engine.GetMainLoop()).ProcessFrame += Tick;
         ((SceneTree)Engine.GetMainLoop()).Root.TreeExiting += () => Cache.Dispose();
-        string scope = Scope();
-        Cache.Get("cards", scope);
-        Cache.Get("relics", scope);
     }
 
     internal static string Scope()
@@ -76,26 +73,46 @@ internal static class StatsHover
             label.AddThemeFontOverride("normal_font", ResourceLoader.Load<Font>(StatsText.NumberFont));
             label.AddThemeConstantOverride("table_h_separation", 0);
             label.AddThemeConstantOverride("table_v_separation", 6);
-            Active.Add(new LiveTip(__result, owner, panel, label, __state, alignment));
+            var spinner = new Control { Name = "SppLoading", Size = new Vector2(24, 24), MouseFilter = Control.MouseFilterEnum.Ignore };
+            spinner.Draw += () =>
+            {
+                float angle = Time.GetTicksMsec() / 700f;
+                spinner.DrawArc(spinner.Size / 2, 8, 0, Mathf.Tau, 40, new Color("526c75"), 2, true);
+                spinner.DrawArc(spinner.Size / 2, 8, angle, angle + 4.4f, 32, new Color("f2d68d"), 2, true);
+            };
+            label.AddChild(spinner);
+            spinner.Visible = label.Text == " ";
+            Active.Add(new LiveTip(__result, owner, panel, label, spinner, __state, alignment));
         }
         catch (Exception error) { Disable(error); }
     }
 
-    private static string? Text(Request request) => StatsText.Render(Cache.Get(request.Kind, request.Bracket), request.Id, request.Upgraded, request.Act, request.Bracket);
+    private static string? Text(Request request)
+    {
+        var view = Cache.Get(request.Kind, request.Bracket);
+        return StatsText.Render(view, request.Id, request.Upgraded, request.Act, request.Bracket) ?? (view.Loading && view.Data == null ? " " : null);
+    }
 
     private static void Tick()
     {
-        if (_failed || Time.GetTicksMsec() < _nextTick) return;
-        _nextTick = Time.GetTicksMsec() + 200;
+        if (_failed) return;
         try
         {
             Active.RemoveAll(t => !GodotObject.IsInstanceValid(t.Set) || t.Set.IsQueuedForDeletion() || !GodotObject.IsInstanceValid(t.Owner));
+            foreach (var tip in Active.Where(t => t.Spinner.Visible))
+            {
+                tip.Spinner.Position = (tip.Label.Size - tip.Spinner.Size) / 2;
+                tip.Spinner.QueueRedraw();
+            }
+            if (Time.GetTicksMsec() < _nextTick) return;
+            _nextTick = Time.GetTicksMsec() + 200;
             foreach (var tip in Active)
             {
                 string? text = Text(tip.Request);
                 bool visible = text != null;
                 if (tip.Panel.Visible == visible && (!visible || tip.Label.Text == text)) continue;
                 tip.Panel.Visible = visible;
+                tip.Spinner.Visible = text == " ";
                 if (text != null) tip.Label.Text = text;
                 tip.Panel.ResetSize();
                 var flow = tip.Set.GetNode<Control>("textHoverTipContainer");

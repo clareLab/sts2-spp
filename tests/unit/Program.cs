@@ -18,6 +18,8 @@ try
     var data = Statistics.Parse(payload, "cards", scope);
     Check(data.Items["BASH"].PickRate == 10 && data.Items["BASH"].WinRate == 25, "derive rates from the correct denominators");
     Reject(() => Statistics.Parse(payload, "cards", "solo:a10"), "reject a mismatched data bracket");
+    Reject(() => Statistics.Parse(payload, "cards", "solo:a5:v0.111.0"), "never show A10 statistics for another ascension");
+    Reject(() => Statistics.Parse(payload, "cards", "2p:a10:v0.111.0"), "never mix solo and multiplayer statistics");
     Reject(() => Statistics.Parse(payload.Replace("solo:a10:", "solo:"), "cards", scope), "reject all-ascension data for an A10 request");
     Reject(() => Statistics.Parse(payload, "relics", scope), "reject mismatched entity data");
     Reject(() => Statistics.Parse("<html>error</html>", "cards", scope), "reject non-JSON responses");
@@ -26,6 +28,7 @@ try
     Check(zero.Items["BASH"].PickRate == null, "missing offers do not become zero percent");
     string? text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
     Check(text != null && text.Contains("Act 3 pick") && text.Contains("0.0%"), "keep measured zero percentages");
+    Check(text != null && text.Contains("A10") && text.Contains("Solo") && !text.Contains(" / "), "keep ascension and party size in separate cells");
     Check(StatsText.Render(new(data, now, false, false), "BASH", false, 1, scope)?.Contains("Act 2 pick") == false, "omit unknown act rates");
     Check(StatsText.Render(new(data, now, false, true), "BASH", true, 0, scope)?.Contains("Cached") == true, "label offline snapshots");
     Check(StatsText.Render(new(data, now, false, false), "UNKNOWN", false, 0, scope) == null, "hide items without samples");

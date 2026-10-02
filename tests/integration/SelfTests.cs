@@ -48,14 +48,15 @@ internal static class SelfTests
             await Frames(3);
             SaveManager.Instance.SetFtuesEnabled(false);
             ValidateNumbers();
+            Check(StatsHover.Scope().Split(':').Contains("a10"), "use A10 statistics before a run starts");
+            var run = await NGame.Instance!.StartNewSingleplayerRun(ModelDb.Character<Ironclad>(), true,
+                ActModel.GetDefaultList(), [], "SPP-PREVIEW-001", GameMode.Standard);
+            Check(run.AscensionLevel != 10 && StatsHover.Scope().Split(':').Contains("a10"), "use A10 statistics during a lower-ascension run");
             string bracket = StatsHover.Scope();
-            Check(bracket.Split(':').Contains("a10"), "request A10 statistics before a run starts");
+            Check(bracket.StartsWith("solo:a10:", StringComparison.Ordinal), "scope keeps the current party size and game version");
             for (int i = 0; i < 1200 && (StatsHover.Cache.Get("cards", bracket).Loading || StatsHover.Cache.Get("relics", bracket).Loading); i++) await Frames(1);
             Check(StatsHover.Cache.Get("cards", bracket).Data?.Items.Count > 0, "live card statistics loaded");
             Check(StatsHover.Cache.Get("relics", bracket).Data?.Items.Count > 0, "live relic statistics loaded");
-            var run = await NGame.Instance!.StartNewSingleplayerRun(ModelDb.Character<Ironclad>(), true,
-                ActModel.GetDefaultList(), [], "SPP-PREVIEW-001", GameMode.Standard);
-            Check(run.AscensionLevel != 10 && StatsHover.Scope() == bracket, "keep A10 statistics during a lower-ascension run");
             await RunManager.Instance.EnterMapCoord(run.Map!.GetAllMapPoints().Where(p => p.PointType == MapPointType.Monster).OrderBy(p => p.coord.row).First().coord);
             await Frames(3);
             var cards = new CardModel[] { ModelDb.Card<PommelStrike>().ToMutable(), ModelDb.Card<ShrugItOff>().ToMutable(), ModelDb.Card<DefendIronclad>().ToMutable() };
@@ -63,6 +64,7 @@ internal static class SelfTests
             var screen = NCardRewardSelectionScreen.ShowScreen(cards.Select(c => new CardCreationResult(c)).ToArray(), [])!;
             await Delay(1);
             var holder = screen.GetCardHolder(cards[0]);
+            await ValidateLoading(holder, bracket);
             AccessTools.Method(typeof(NCardHolder), "CreateHoverTips").Invoke(holder, null);
             await Frames(3);
             await Screenshot("card");
@@ -133,7 +135,7 @@ internal static class SelfTests
         var panel = Panels().Single();
         var label = panel.GetNode<RichTextLabel>("%Description");
         GD.Print($"[spp] {name} panel {panel.GetGlobalRect()}, text {label.Size}, content {label.GetContentWidth()} x {label.GetContentHeight()}");
-        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo / A10"), name + " tooltip shows source and population");
+        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo") && label.Text.Contains("A10") && !label.Text.Contains(" / "), name + " tooltip separates source, ascension and party size");
         Check(label.GetContentHeight() <= label.Size.Y + 2, name + " tooltip text is not clipped");
         Check(label.GetContentWidth() >= label.Size.X - 15 && label.GetContentWidth() <= label.Size.X + 2, name + " statistics use the available width");
         var rectangle = panel.GetGlobalRect();
@@ -155,6 +157,50 @@ internal static class SelfTests
                 return probe.GetContentWidth();
             }).ToArray();
             Check(widths.Min() > 0 && widths.Max() - widths.Min() <= 1, $"equal digit advances at {size}px");
+        }
+    }
+
+    private static async Task ValidateLoading(NCardHolder holder, string bracket)
+    {
+        var original = StatsHover.Cache;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new LoadingHandler(gate.Task, JsonSerializer.Serialize(new
+        {
+            entity_type = "cards",
+            bracket,
+            rows = new[] { new { id = holder.CardModel!.Id.Entry, picks = 200, wins = 50, offered = 1000, picked = 100 } }
+        }));
+        string path = ProjectSettings.GlobalizePath("user://spp-loading-" + Guid.NewGuid());
+        using var cache = new StatsCache(path, new System.Net.Http.HttpClient(handler));
+        try
+        {
+            AccessTools.Property(typeof(StatsHover), nameof(StatsHover.Cache)).SetValue(null, cache);
+            AccessTools.Method(typeof(NCardHolder), "CreateHoverTips").Invoke(holder, null);
+            await Frames(5);
+            var panel = Panels().Single();
+            var spinner = Descendants(panel).OfType<Control>().Single(n => n.Name == "SppLoading");
+            Check(spinner.Visible && spinner.MouseFilter == Control.MouseFilterEnum.Ignore && panel.GetNode<RichTextLabel>("%Description").Text == " ",
+                "pending statistics show only a nonblocking spinner in the native tip");
+            await Screenshot("loading");
+            gate.SetResult();
+            for (int i = 0; i < 300 && spinner.Visible; i++) await Frames(1);
+            Check(!spinner.Visible && panel.GetNode<RichTextLabel>("%Description").Text.Contains("25.0%"),
+                "completed statistics replace the spinner without another hover");
+        }
+        finally
+        {
+            gate.TrySetResult();
+            NHoverTipSet.Clear();
+            AccessTools.Property(typeof(StatsHover), nameof(StatsHover.Cache)).SetValue(null, original);
+        }
+    }
+
+    private sealed class LoadingHandler(Task ready, string payload) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await ready.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(payload) };
         }
     }
 

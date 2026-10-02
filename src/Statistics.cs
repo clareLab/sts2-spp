@@ -75,9 +75,10 @@ internal static class StatsText
         string body = "[table=2]" + string.Join("", lines) + "[/table]";
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
-        string difficulty = scope.Contains("a10") ? "A10" : "All ascensions";
+        string difficulty = scope.FirstOrDefault(s => s.Length > 1 && s[0] == 'a' && int.TryParse(s.AsSpan(1), out _))?.ToUpperInvariant() ?? "All ascensions";
         string cache = view.Offline && view.Data != null ? "\nCached statistics" : "";
-        return body + $"\n[font_size=16][color=#b3c0c2][table=2][cell expand=2 shrink=false]Spire Codex[/cell][cell expand=3 shrink=false][right]{players} / {difficulty}[/right][/cell][/table]{cache}[/color][/font_size]";
+        string population = $"[font_size=16][color=#b3c0c2][table=2][cell expand=1 shrink=false]{difficulty}[/cell][cell expand=1 shrink=false][right]{players}[/right][/cell][/table][/color][/font_size]";
+        return population + "\n" + body + $"\n[font_size=16][color=#b3c0c2]Spire Codex{cache}[/color][/font_size]";
 
         void Add(string label, double? value, long samples = 0, string unit = "")
         {
