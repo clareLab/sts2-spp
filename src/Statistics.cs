@@ -76,9 +76,9 @@ internal static class StatsText
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
         string difficulty = scope.FirstOrDefault(s => s.Length > 1 && s[0] == 'a' && int.TryParse(s.AsSpan(1), out _))?.ToUpperInvariant() ?? "All ascensions";
-        string cache = view.Offline && view.Data != null ? "\nCached statistics" : "";
+        string cache = view.Offline && view.Data != null ? Secondary("Cached statistics") : "";
         string population = $"[font_size=16][color=#b3c0c2][table=2][cell expand=1 shrink=false]{difficulty}[/cell][cell expand=1 shrink=false][right]{players}[/right][/cell][/table][/color][/font_size]";
-        return population + "\n" + body + $"\n[font_size=16][color=#b3c0c2]Spire Codex{cache}[/color][/font_size]";
+        return population + "\n" + body + cache;
 
         void Add(string label, double? value, long samples = 0, string unit = "")
         {
@@ -86,7 +86,7 @@ internal static class StatsText
             string sampleLabel = samples > 0 ? Secondary(unit) : "";
             string sampleCount = samples > 0 ? Secondary(samples.ToString("N0", CultureInfo.InvariantCulture)) : "";
             string percentage = value.Value.ToString("0.0", CultureInfo.InvariantCulture) + "%";
-            string number = Numeric($"[font_size=22][color=#f2d68d]{percentage}[/color][/font_size]{sampleCount}");
+            string number = Numeric($"[font_size=22][color={PercentageColor(value.Value)}]{percentage}[/color][/font_size]{sampleCount}");
             lines.Add($"[cell expand=1 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=1 shrink=false][right]{number}[/right][/cell]");
         }
 
@@ -94,4 +94,17 @@ internal static class StatsText
     }
 
     internal static string Numeric(string text) => $"[font={NumberFont}][otf=tnum,lnum,kern=0]{text}[/otf][/font]";
+
+    private static string PercentageColor(double value)
+    {
+        double position = Math.Clamp(value / 50, 0, 2);
+        int from = position <= 1 ? 0xFF5555 : 0xEFC851;
+        int to = position <= 1 ? 0xEFC851 : 0x36C78A;
+        double weight = position <= 1 ? position : position - 1;
+        return "#" + string.Concat(new[] { 16, 8, 0 }.Select(shift =>
+        {
+            double channel = ((from >> shift) & 255) * (1 - weight) + ((to >> shift) & 255) * weight;
+            return ((int)Math.Round(channel * .8 + ((0xFFF6E2 >> shift) & 255) * .2)).ToString("X2", CultureInfo.InvariantCulture);
+        }));
+    }
 }

@@ -135,7 +135,7 @@ internal static class SelfTests
         var panel = Panels().Single();
         var label = panel.GetNode<RichTextLabel>("%Description");
         GD.Print($"[spp] {name} panel {panel.GetGlobalRect()}, text {label.Size}, content {label.GetContentWidth()} x {label.GetContentHeight()}");
-        Check(label.Text.Contains("Spire Codex") && label.Text.Contains("Solo") && label.Text.Contains("A10") && !label.Text.Contains(" / "), name + " tooltip separates source, ascension and party size");
+        Check(!label.Text.Contains("Spire Codex") && label.Text.Contains("Solo") && label.Text.Contains("A10") && !label.Text.Contains(" / "), name + " tooltip keeps separate scope labels without a footer");
         Check(label.GetContentHeight() <= label.Size.Y + 2, name + " tooltip text is not clipped");
         Check(label.GetContentWidth() >= label.Size.X - 15 && label.GetContentWidth() <= label.Size.X + 2, name + " statistics use the available width");
         var rectangle = panel.GetGlobalRect();
