@@ -69,6 +69,8 @@ internal static class StatsHover
             var panel = __result.GetNode<Control>("textHoverTipContainer").GetChildren().OfType<Control>().Last();
             var label = panel.GetNode<RichTextLabel>("%Description");
             panel.Name = "SppStatistics";
+            panel.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+            label.CustomMinimumSize = new Vector2(220, 0);
             label.AutowrapMode = TextServer.AutowrapMode.Word;
             label.AddThemeFontOverride("normal_font", ResourceLoader.Load<Font>(StatsText.NumberFont));
             label.AddThemeConstantOverride("table_h_separation", 0);
@@ -82,7 +84,9 @@ internal static class StatsHover
             };
             label.AddChild(spinner);
             spinner.Visible = label.Text == " ";
-            Active.Add(new LiveTip(__result, owner, panel, label, spinner, __state, alignment));
+            var live = new LiveTip(__result, owner, panel, label, spinner, __state, alignment);
+            Active.Add(live);
+            Layout(live);
         }
         catch (Exception error) { Disable(error); }
     }
@@ -115,16 +119,23 @@ internal static class StatsHover
                 tip.Panel.Visible = visible;
                 tip.Spinner.Visible = text == " ";
                 if (text != null) tip.Label.Text = text;
-                tip.Panel.ResetSize();
-                var flow = tip.Set.GetNode<Control>("textHoverTipContainer");
-                float height = flow.GetChildren().OfType<Control>().Where(p => p.Visible).Sum(p => p.GetCombinedMinimumSize().Y + 5);
-                flow.Size = new Vector2(360, Math.Min(height, tip.Set.GetViewportRect().Size.Y - 50));
-                if (tip.Owner is NCardHolder holder) tip.Set.SetAlignmentForCardHolder(holder);
-                else if (tip.Owner is NRelicBasicHolder relic) tip.Set.SetAlignmentForRelic(relic.Relic);
-                else tip.Set.SetAlignment(tip.Owner, tip.Alignment);
+                Layout(tip);
             }
         }
         catch (Exception error) { Disable(error); }
+    }
+
+    private static void Layout(LiveTip tip)
+    {
+        tip.Panel.ResetSize();
+        var flow = tip.Set.GetNode<Control>("textHoverTipContainer");
+        var sizes = flow.GetChildren().OfType<Control>().Where(p => p.Visible).Select(p => p.GetCombinedMinimumSize()).ToArray();
+        float width = sizes.Length > 0 ? sizes.Max(size => size.X) + 1 : 1;
+        float height = sizes.Sum(size => size.Y + 5);
+        flow.Size = new Vector2(width, Math.Min(height, tip.Set.GetViewportRect().Size.Y - 50));
+        if (tip.Owner is NCardHolder holder) tip.Set.SetAlignmentForCardHolder(holder);
+        else if (tip.Owner is NRelicBasicHolder relic) tip.Set.SetAlignmentForRelic(relic.Relic);
+        else tip.Set.SetAlignment(tip.Owner, tip.Alignment);
     }
 
     private static void Disable(Exception error)

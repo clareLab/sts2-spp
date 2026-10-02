@@ -85,7 +85,7 @@ internal static class StatsText
             if (act is >= 0 and < 3) Add($"Act {act + 1} pick", item.ActPickRates[act]);
         }
         if (lines.Count == 0) return null;
-        string body = "[table=3]" + string.Join("", lines) + "[/table]";
+        string body = "[table=2]" + string.Join("", lines) + "[/table]";
         string[] scope = bracket.Split(':');
         string players = scope[0] == "solo" ? "Solo" : scope[0].EndsWith('p') ? scope[0][..^1] + " players" : "All players";
         string difficulty = scope.FirstOrDefault(s => s.Length > 1 && s[0] == 'a' && int.TryParse(s.AsSpan(1), out _))?.ToUpperInvariant() ?? "All ascensions";
@@ -96,14 +96,15 @@ internal static class StatsText
         void Add(string label, double? value, long samples = 0, string unit = "", bool delta = false)
         {
             if (!value.HasValue) return;
+            label = label.Replace(' ', '\u00a0');
             string sampleLabel = samples > 0 ? Secondary(unit) : "";
             string sampleCount = samples > 0 ? Secondary(samples.ToString("N0", CultureInfo.InvariantCulture)) : "";
             double rounded = Math.Round(value.Value, 1, MidpointRounding.AwayFromZero);
             string percentage = delta ? rounded.ToString("+0.0;−0.0;0.0", CultureInfo.InvariantCulture) : rounded.ToString("0.0", CultureInfo.InvariantCulture);
             string color = PercentageColor(delta ? 50 + rounded * 2.5 : rounded);
-            string number = Numeric($"[font_size=22][color={color}]{percentage}[/color][/font_size]{sampleCount}");
             string suffix = delta ? "pp" : "%";
-            lines.Add($"[cell expand=4 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=3 shrink=false][right]{number}[/right][/cell][cell expand=1 shrink=false][font_size=22][color={color}]\u00a0{suffix}[/color][/font_size][/cell]");
+            string number = Numeric($"[font_size=22][color={color}]{percentage}\u00a0{suffix}[/color][/font_size]{sampleCount}");
+            lines.Add($"[cell expand=5 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=4 shrink=false][right]{number}[/right][/cell]");
         }
 
         static string Secondary(string text) => $"\n[font_size=16][color=#b3c0c2]{text}[/color][/font_size]";
