@@ -9,7 +9,7 @@ internal sealed record ItemStats(long Runs, long Wins, long Offered, long Picked
     internal double? PickRate => Offered > 0 ? 100d * Picked / Offered : null;
 }
 
-internal sealed record Statistics(string Kind, string Bracket, Dictionary<string, ItemStats> Items, long TotalRuns, double? BaselineWinRate = null)
+internal sealed record Statistics(string Kind, string Bracket, Dictionary<string, ItemStats> Items, long TotalRuns, double? BaselineWinRate = null, double? BaselinePickRate = null)
 {
     internal Statistics WithPopulation(string payload)
     {
@@ -53,7 +53,10 @@ internal sealed record Statistics(string Kind, string Bracket, Dictionary<string
             }
             items[id + (upgraded ? "+" : "")] = new ItemStats(runs, wins, offered, picked, acts);
         }
-        return new Statistics(kind, bracket, items, Count(root, "total_runs"));
+        long totalOffered = items.Values.Sum(item => item.Offered);
+        long totalPicked = items.Values.Sum(item => item.Picked);
+        return new Statistics(kind, bracket, items, Count(root, "total_runs"),
+            BaselinePickRate: totalOffered > 0 ? 100d * totalPicked / totalOffered : null);
     }
 
     private static long Count(JsonElement row, string name)
@@ -101,7 +104,8 @@ internal static class StatsText
             string sampleCount = samples > 0 ? Secondary(samples.ToString("N0", CultureInfo.InvariantCulture)) : "";
             double rounded = Math.Round(value.Value, 1, MidpointRounding.AwayFromZero);
             string percentage = delta ? rounded.ToString("+0.0;−0.0;0.0", CultureInfo.InvariantCulture) : rounded.ToString("0.0", CultureInfo.InvariantCulture);
-            string color = PercentageColor(delta ? 50 + rounded * 2.5 : rounded);
+            string color = delta ? PercentageColor(50 + rounded * 2.5, 50) :
+                view.Data?.BaselinePickRate is { } baseline ? PercentageColor(rounded, baseline) : "#FFF6E2";
             string suffix = delta ? "pp" : "%";
             string number = Numeric($"[font_size=22][color={color}]{percentage}\u00a0{suffix}[/color][/font_size]{sampleCount}");
             lines.Add($"[cell expand=5 shrink=false][font_size=22]{label}[/font_size]{sampleLabel}[/cell][cell expand=4 shrink=false][right]{number}[/right][/cell]");
@@ -112,9 +116,11 @@ internal static class StatsText
 
     internal static string Numeric(string text) => $"[font={NumberFont}][otf=tnum,lnum,kern=0]{text}[/otf][/font]";
 
-    private static string PercentageColor(double value)
+    internal static string PercentageColor(double value, double baseline)
     {
-        double position = Math.Clamp(value / 50, 0, 2);
+        double position = value <= baseline ? (baseline > 0 ? value / baseline : 1) :
+            baseline < 100 ? 1 + (value - baseline) / (100 - baseline) : 1;
+        position = Math.Clamp(position, 0, 2);
         int from = position <= 1 ? 0xFF5555 : 0xEFC851;
         int to = position <= 1 ? 0xEFC851 : 0x36C78A;
         double weight = position <= 1 ? position : position - 1;

@@ -20,6 +20,24 @@ try
     var data = Statistics.Parse(payload, "cards", scope).WithPopulation(population);
     Check(data.Items["BASH"].PickRate == 10 && data.Items["BASH"].WinRate == 25, "derive rates from the correct denominators");
     Check(data.BaselineWinRate == 20, "derive the baseline from overall runs rather than entity-weighted rates");
+    var weighted = Statistics.Parse(JsonSerializer.Serialize(new
+    {
+        entity_type = "cards",
+        bracket = scope,
+        total_runs = 1000,
+        rows = new[] {
+            new { id = "COMMON", offered = 900, picked = 180 },
+            new { id = "RARE", offered = 100, picked = 10 },
+            new { id = "UNOBSERVED", offered = 0, picked = 0 }
+        }
+    }), "cards", scope);
+    Check(weighted.BaselinePickRate == 19, "weight the pick baseline by offers rather than averaging card percentages");
+    Check(StatsText.PercentageColor(19, 19) == "#F2D16E", "the weighted pick baseline is native gold");
+    Check(StatsText.PercentageColor(0, 19) == "#FF7571" && StatsText.PercentageColor(100, 19) == "#5ED09C",
+        "pick colours reach native red and green at the percentage endpoints");
+    Check(StatsText.PercentageColor(0, 0) == "#F2D16E" && StatsText.PercentageColor(100, 100) == "#F2D16E",
+        "zero and full baselines stay gold without division by zero");
+    Check(StatsText.PercentageColor(50, 50) == StatsText.PercentageColor(19, 19), "win and pick baselines share the same gold");
     Reject(() => data.WithPopulation(population.Replace("1000", "1001")), "reject mismatched baseline sample counts");
     Reject(() => data.WithPopulation(population.Replace("\"ascension\":10", "\"ascension\":0")), "reject a baseline from another ascension");
     Reject(() => Statistics.Parse(payload, "cards", "solo:a10"), "reject a mismatched data bracket");
@@ -31,9 +49,14 @@ try
     Reject(() => Statistics.Parse(payload.Replace("\"picks\":200", "\"picks\":-1"), "cards", scope), "reject negative counts");
     var zero = Statistics.Parse(payload.Replace("\"offered\":1000", "\"offered\":0").Replace("\"picked\":100", "\"picked\":0"), "cards", scope);
     Check(zero.Items["BASH"].PickRate == null, "missing offers do not become zero percent");
+    Check(zero.BaselinePickRate == null, "missing offers do not create a pick baseline");
+    Check(StatsText.Render(new(zero, now, false, false), "BASH", false, 0, scope)?.Contains("[color=#FFF6E2]12.0\u00a0%") == true,
+        "act rates stay neutral when the overall pick baseline is unavailable");
     string? text = StatsText.Render(new(data, now, false, false), "BASH", false, 2, scope);
     Check(text != null && text.Contains("Act\u00a03\u00a0pick") && text.Contains("0.0") && text.Contains("\u00a0%"), "keep measured zero percentages");
     Check(text != null && text.Contains("A10") && text.Contains("Solo") && !text.Contains(" / "), "keep ascension and party size in separate cells");
+    Check(text != null && text.Contains("[color=#F2D16E]10.0\u00a0%"), "pick rates retain their actual percentage at the gold baseline");
+    Check(text != null && text.Contains("[color=#FF7571]0.0\u00a0%"), "current-act rates use the overall weighted pick baseline");
     Check(text != null && text.Contains("Win\u00a0rate\u00a0Δ") && text.Contains("+5.0") && text.Contains("\u00a0pp") && !text.Contains("25.0"), "show percentage-point delta instead of absolute win rate");
     var equal = data with { BaselineWinRate = 25 };
     Check(StatsText.Render(new(equal, now, false, false), "BASH", false, 0, scope)?.Contains("]0.0\u00a0pp[") == true, "keep neutral deltas unsigned");
