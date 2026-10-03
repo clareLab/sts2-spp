@@ -82,14 +82,17 @@ def prepare(root):
         "contentDescriptors": [],
     })
     previews = workspace / "previews"
+    images = sorted((root / "workshop/previews").glob("*.png"))
+    if not images:
+        raise ValueError("Workshop previews are missing")
+    for preview in images:
+        if preview.stat().st_size >= 1_000_000 or not preview.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
+            raise ValueError(f"{preview.name} must be a PNG smaller than 1 MB")
     if previews.exists():
         shutil.rmtree(previews)
     previews.mkdir()
-    for name in ("card", "relic"):
-        preview = root / "artifacts/validation" / f"{name}.png"
-        if not preview.is_file() or preview.stat().st_size >= 1_000_000:
-            raise ValueError(f"Missing or oversized {name} preview; run game checks first")
-        shutil.copy2(preview, previews / f"{name}.png")
+    for preview in images:
+        shutil.copy2(preview, previews / preview.name)
     return workspace
 
 

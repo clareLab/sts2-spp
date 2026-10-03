@@ -13,7 +13,7 @@ class WorkshopTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for name in ("src", "workshop", "artifacts/dist/spp", "artifacts/validation"):
+        for name in ("src", "workshop", "artifacts/dist/spp", "workshop/previews"):
             (self.root / name).mkdir(parents=True)
         self.config = {"id": None, "visibility": "public", "dependencies": [], "description": "Community statistics in native tooltips."}
         self.manifest = {"id": "spp", "name": "Stats ++", "description": "Card and relic statistics.", "version": "0.1.6"}
@@ -23,7 +23,7 @@ class WorkshopTests(unittest.TestCase):
         (self.root / "src/spp.csproj").write_text("<Project><PropertyGroup><Version>0.1.6</Version></PropertyGroup></Project>")
         (self.root / "workshop/image.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         for name in ("card", "relic"):
-            (self.root / f"artifacts/validation/{name}.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+            (self.root / f"workshop/previews/{name}.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         (self.root / "artifacts/dist/spp/spp.dll").write_bytes(b"fixture")
         (self.root / "artifacts/dist/spp/LICENSE").write_text("MIT")
 
@@ -62,8 +62,9 @@ class WorkshopTests(unittest.TestCase):
             workshop.prepare(self.root)
 
     def test_missing_screenshot_blocks_upload(self):
-        (self.root / "artifacts/validation/card.png").unlink()
-        with self.assertRaisesRegex(ValueError, "game checks"):
+        (self.root / "workshop/previews/card.png").unlink()
+        (self.root / "workshop/previews/relic.png").unlink()
+        with self.assertRaisesRegex(ValueError, "previews"):
             workshop.prepare(self.root)
 
     def test_existing_item_is_updated(self):
